@@ -42,3 +42,43 @@ def get_me(
     if not user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
     return user
+
+@router.put("/update")
+def update_user(
+    update: schemas.UserUpdate,  # schema que vamos criar
+    current_email: str = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    user = db.query(models.User).filter(models.User.email == current_email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    
+    # Atualiza username
+    if update.username:
+        user.username = update.username
+    
+    # Atualiza email
+    if update.email:
+        # verifica se o email já existe
+        existing_user = db.query(models.User).filter(models.User.email == update.email).first()
+        if existing_user and existing_user.id != user.id:
+            raise HTTPException(status_code=400, detail="Email já cadastrado")
+        user.email = update.email
+    
+    # Atualiza senha
+    if update.old_password or update.new_password or update.new_password_confirm:
+        if not update.old_password or not update.new_password or not update.new_password_confirm:
+            raise HTTPException(status_code=400, detail="Preencha todas as senhas para alterar")
+        
+        if not auth.verify_password(update.old_password, user.password):
+            raise HTTPException(status_code=400, detail="Senha antiga incorreta")
+        
+        if update.new_password != update.new_password_confirm:
+            raise HTTPException(status_code=400, detail="Novas senhas não conferem")
+        
+        user.password = auth.hash_password(update.new_password)
+    
+    db.commit()
+    db.refresh(user)
+    
+    return {"message": "Usuário atualizado com sucesso"}
