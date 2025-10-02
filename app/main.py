@@ -10,7 +10,7 @@ app = FastAPI(title="API Backend em Python")
 
 # Configurar CORS para permitir o frontend Next.js (localhost:3000)
 origins = [
-    "http://localhost:3000",  # endereço do seu frontend
+    "*",  # endereço do seu frontend
 ]
 
 app.add_middleware(

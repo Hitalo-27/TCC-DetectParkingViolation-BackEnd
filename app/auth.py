@@ -4,11 +4,18 @@ from datetime import datetime, timedelta
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+JWT_SECRET_KEY = os.getenv("JWT_SECRET")
+
 # Criptografia da senha
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Config JWT
-SECRET_KEY = "chave_super_secreta"
+SECRET_KEY = JWT_SECRET_KEY
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
