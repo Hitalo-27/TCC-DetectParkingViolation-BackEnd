@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from .database import Base, engine
 from .routes import users
 
@@ -27,3 +28,6 @@ app.include_router(users.router)
 @app.get("/")
 def root():
     return {"msg": "API rodando com sucesso 🚀"}
+
+# Serve a pasta uploads como /uploads
+app.mount("/uploads", StaticFiles(directory="app/uploads"), name="uploads")
