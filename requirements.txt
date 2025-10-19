@@ -6,3 +6,10 @@ passlib[bcrypt]
 python-jose
 email-validator
 python-dotenv
+requests
+ultralytics
+easyocr
+torch
+torchvision
+torchaudio
+scikit-learn

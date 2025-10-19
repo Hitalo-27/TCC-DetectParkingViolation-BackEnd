@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .database import Base, engine
 from .routes import users
+from .routes import validations
 
 # Criar tabelas no banco
 Base.metadata.create_all(bind=engine)
@@ -23,6 +24,7 @@ app.add_middleware(
 
 # Registrar rotas
 app.include_router(users.router)
+app.include_router(validations.router)
 
 @app.get("/")
 def root():
