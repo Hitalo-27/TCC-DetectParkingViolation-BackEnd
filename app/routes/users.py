@@ -6,6 +6,7 @@ import os
 import shutil
 from datetime import datetime
 
+
 UPLOAD_DIR = "app/uploads"
 UPLOAD_DIR_RELATIVE = "uploads"
 
