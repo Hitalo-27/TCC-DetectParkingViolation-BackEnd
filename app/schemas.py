@@ -12,6 +12,7 @@ class UserResponse(BaseModel):
     id: int
     username: str
     email: EmailStr
+    image_url: Optional[str] = None
 
     class Config:
         orm_mode = True

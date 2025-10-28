@@ -9,6 +9,7 @@ class User(Base):
     username = Column(String(100), unique=True, index=True, nullable=False)
     email = Column(String(100), unique=True, index=True, nullable=False)
     password = Column(String(255), nullable=False)
+    image_url = Column(String, nullable=True)
 
 class Car(Base):
     __tablename__ = "veiculo"
