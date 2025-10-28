@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from .database import Base, engine
 from .routes import users
 from .routes import validations
+from .routes import infracoes
 
 # Criar tabelas no banco
 Base.metadata.create_all(bind=engine)
@@ -25,7 +26,8 @@ app.add_middleware(
 
 # Registrar rotas
 app.include_router(users.router)
-app.include_router(validations.router)
+# app.include_router(validations.router)
+app.include_router(infracoes.router)
 
 @app.get("/")
 def root():

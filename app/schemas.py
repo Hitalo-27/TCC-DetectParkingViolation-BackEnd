@@ -1,5 +1,7 @@
+from datetime import datetime
 from pydantic import BaseModel, EmailStr
 from typing import Optional
+from typing import List
 
 # Para entrada (cadastro)
 class UserCreate(BaseModel):
@@ -15,7 +17,7 @@ class UserResponse(BaseModel):
     image_url: Optional[str] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Para login
 class UserLogin(BaseModel):
@@ -29,3 +31,31 @@ class UserUpdate(BaseModel):
     old_password: Optional[str] = None
     new_password: Optional[str] = None
     new_password_confirm: Optional[str] = None
+
+class AddressBase(BaseModel):
+    pais: str
+    estado: str
+    cidade: str
+
+class CarBase(BaseModel):
+    cor: str
+    placa_numero: str
+    origem: str
+    endereco_id: int
+
+class TypeOfInfractionBase(BaseModel):
+    gravidade: str
+    pontos: int
+    descricao: str
+
+class InfractionsBase(BaseModel):
+    data: datetime
+    imagem: Optional[str] = None
+    veiculo: CarBase
+    endereco: AddressBase
+    tipo_infracao: TypeOfInfractionBase
+    arquivo: Optional[int] = None
+
+class InfractionsResponse(BaseModel):
+    placa: str
+    infracoes: List[InfractionsBase]
