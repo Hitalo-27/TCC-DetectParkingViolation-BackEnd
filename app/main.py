@@ -6,6 +6,7 @@ from .routes import users
 from .routes import validations
 from .routes import infracoes
 from .routes import veiculos
+from .routes import plateIdentification
 
 # Criar tabelas no banco
 Base.metadata.create_all(bind=engine)
@@ -30,6 +31,7 @@ app.include_router(users.router)
 # app.include_router(validations.router)
 app.include_router(infracoes.router)
 app.include_router(veiculos.router)
+app.include_router(plateIdentification.router)
 
 @app.get("/")
 def root():

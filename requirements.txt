@@ -14,3 +14,4 @@ torchvision
 torchaudio
 scikit-learn
 python-multipart
+httpx
