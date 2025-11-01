@@ -1,12 +1,16 @@
 # app/platereq.py
 import requests
 from typing import Any, Dict
+import os
+from dotenv import load_dotenv
 
-API_URL = "https://dynamics.radarconsultas.com.br/api/agregados"
+
+
+API_URL = os.getenv("RADARCONSULTAS_URL") 
 
 # 🔐 Credenciais (substitua pelos valores reais)
-USERNAME = "Hitalo"
-PASSWORD = "Hit@l@2025$"
+USERNAME =  os.getenv("RADAR_NAME")
+PASSWORD = os.getenv("RADAR_PASSWORD")
 
 def chamando(placa: str) -> Dict[str, Any]:
     """

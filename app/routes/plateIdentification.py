@@ -1,10 +1,13 @@
-from fastapi import APIRouter, File, UploadFile
+from fastapi import APIRouter, File, UploadFile, Depends
 from fastapi.responses import JSONResponse
-from ..database import get_db
+from .. import schemas, models
+from sqlalchemy.orm import Session
 import os
 from dotenv import load_dotenv
 import base64
 import httpx
+from app.platereq import chamando
+from ..database import get_db
 
 UPLOAD_DIR = "app/uploads"
 UPLOAD_DIR_RELATIVE = "uploads"
@@ -18,7 +21,7 @@ GEMINI_URL = os.getenv("GEMINI_URL")
 
 # Body -> Multipart -> file = imagem
 @router.post("/identification")
-async def get_plate(file: UploadFile = File(...)):
+async def get_plate(db: Session = Depends(get_db), file: UploadFile = File(...)):
     
     try:
         image_bytes = await file.read()
@@ -37,7 +40,7 @@ async def get_plate(file: UploadFile = File(...)):
             {
               "parts": [
                 {
-                  "text": "Leia o numero dessa placa de carro. Responda apenas com o numero da placa."
+                  "text": "Leia o numero dessa placa de carro. Responda apenas com o numero e letra da placa, desconsidere os traços ´-´."
                 },
                 {
                   "inlineData": {
@@ -68,9 +71,38 @@ async def get_plate(file: UploadFile = File(...)):
             
         placa = gemini_response["candidates"][0]["content"]["parts"][0]["text"]  
         
-        print(f"Response: {placa}")    
+        print(f"Response: {placa}")   
         
-        return {"placa_identificada": placa.strip()}
+        car_information = chamando(placa)
+        
+        new_address = models.Address(
+          pais="Brasil",
+          estado=car_information['veiculos']['sg_uf'],
+          cidade=car_information['veiculos']['cd_municipio'].strip()
+        )
+        
+        db.add(new_address)
+
+        db.commit()
+
+        db.refresh(new_address)
+
+        address_id = new_address.id
+        
+        new_user = models.Car(
+            cor=car_information['veiculos']['cd_cor_veiculo'],
+            placa_numero=placa,
+            origem="teste",
+            endereco_id=address_id
+        )
+                
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        
+        print(f"Response: {new_user}")
+        
+        return {"placa_identificada": placa}
     except httpx.HTTPStatusError as e:
             # Erro específico se a API do Gemini retornar um erro (4xx, 5xx)
             print(f"Erro na API do Gemini: {e.response.text}")
