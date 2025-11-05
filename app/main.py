@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from .routes import imageIdentification
 from .database import Base, engine
 from .routes import users
 from .routes import validations
@@ -32,6 +33,7 @@ app.include_router(users.router)
 app.include_router(infracoes.router)
 app.include_router(veiculos.router)
 app.include_router(plateIdentification.router)
+app.include_router(imageIdentification.router)
 
 @app.get("/")
 def root():
