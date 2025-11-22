@@ -12,7 +12,7 @@ load_dotenv()
 JWT_SECRET_KEY = os.getenv("JWT_SECRET")
 
 # Criptografia da senha
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt_sha256"], deprecated="auto")
 
 # Config JWT
 SECRET_KEY = JWT_SECRET_KEY

@@ -24,7 +24,7 @@ def chamando(placa: str) -> Dict[str, Any]:
         response = requests.post(
             API_URL,
             json=payload,
-            auth=(USERNAME, PASSWORD),  # 👈 Basic Auth aqui!
+            auth=(USERNAME, PASSWORD),  
             timeout=15
         )
 

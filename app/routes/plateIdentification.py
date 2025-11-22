@@ -7,7 +7,9 @@ from dotenv import load_dotenv
 import base64
 import httpx
 from app.platereq import chamando
+from app.utils.get_plate_api import get_plate_function
 from ..database import get_db
+from datetime import datetime
 
 UPLOAD_DIR = "app/uploads"
 UPLOAD_DIR_RELATIVE = "uploads"
@@ -22,64 +24,43 @@ GEMINI_URL = os.getenv("GEMINI_URL")
 # Body -> Multipart -> file = imagem
 @router.post("/identification")
 async def get_plate(db: Session = Depends(get_db), file: UploadFile = File(...)):
+    # return {
+    #     "hasInfraction": True,
+    #     "plate": "placa",
+    #     "location": "Rua Oscar Freire, 123",
+    #     "datetime": "date_formated",
+    #     "infraction": "Estacionamento em vaga de idoso sem credencial",
+    #     "type": "Grave",
+    # }
     
     try:
-        image_bytes = await file.read()
-        
-        # Convertendo a imagem em BASE64
-        image_base64 = base64.b64encode(image_bytes).decode('utf-8')
-        
-        # Chave de acesso
-        headers = {
-            "x-goog-api-key": GEMINI_API_KEY,
-            "Content-Type": "application/json" 
-        }        
-        
-        payload = {
-          "contents": [
-            {
-              "parts": [
-                {
-                  "text": "Leia o numero dessa placa de carro. Responda apenas com o numero e letra da placa, desconsidere os traços ´-´."
-                },
-                {
-                  "inlineData": {
-                    "mimeType": file.content_type,
-                    "data": image_base64
-                  }
-                }
-              ]
-            }
-          ]
-        }  
-              
-        async with httpx.AsyncClient() as client:
-            # A 'await' aqui é a chamada de rede, que não vai bloquear o servidor
-            response = await client.post(
-                GEMINI_URL, 
-                json=payload, 
-                headers=headers,  
-                timeout=30.0
-            )
-            
-            # 5. Tratar erros da API
-            # Isso vai disparar um erro se a resposta for 4xx ou 5xx
-            response.raise_for_status() 
-        
-            # 6. Extrair a resposta
-            gemini_response = response.json()  
-            
-        placa = gemini_response["candidates"][0]["content"]["parts"][0]["text"]  
-        
+        placa = await get_plate_function(file)
+
         print(f"Response: {placa}")   
         
         car_information = chamando(placa)
+
+        print(car_information)
         
+        
+        if car_information.get('error'):
+            print("EBA")
+            color_car = 'Não encontrado'
+            car_estado = "Não identificado"
+            car_cidade = "Não identificado"            
+            
+        else:
+            print("Não")
+            color_car = car_information['veiculos']['cd_cor_veiculo']
+            car_estado = car_information['veiculos']['sg_uf']
+            car_cidade = car_information['veiculos']['cd_municipio'].strip()
+            
+            
         new_address = models.Address(
-          pais="Brasil",
-          estado=car_information['veiculos']['sg_uf'],
-          cidade=car_information['veiculos']['cd_municipio'].strip()
-        )
+            pais="Brasil",
+            estado=car_estado,
+            cidade=car_cidade
+        )    
         
         db.add(new_address)
 
@@ -89,35 +70,48 @@ async def get_plate(db: Session = Depends(get_db), file: UploadFile = File(...))
 
         address_id = new_address.id
         
-        new_user = models.Car(
-            cor=car_information['veiculos']['cd_cor_veiculo'],
+        new_car = models.Car(
+            cor=color_car,
             placa_numero=placa,
             origem="teste",
             endereco_id=address_id
         )
                 
-        db.add(new_user)
+        db.add(new_car)
         db.commit()
-        db.refresh(new_user)
+        db.refresh(new_car)
         
-        print(f"Response: {new_user}")
+        print(f"Response: {new_car}")
         
-        return {"placa_identificada": placa}
+        date_now = datetime.now()
+        date_formated = date_now.strftime("%Y-%m-%d %H:%M")
+
+        # Chamar função que verifica infração
+        # chamar api que pega os metadados
+        # Fazer um try catch decente
+        return {
+            "hasInfraction": True,
+            "plate": placa,
+            "location": "Rua Oscar Freire, 123",
+            "datetime": date_formated,
+            "infraction": "Estacionamento em vaga de idoso sem credencial",
+            "type": "Grave",
+        }
     except httpx.HTTPStatusError as e:
-            # Erro específico se a API do Gemini retornar um erro (4xx, 5xx)
-            print(f"Erro na API do Gemini: {e.response.text}")
-            return JSONResponse(
-                status_code=e.response.status_code, 
-                content={"erro": "Falha ao processar imagem", "error => ": e.response.json()}
-            )
-    except httpx.RequestError as e:
-            # Erro de rede (ex: timeout, não conseguiu conectar)
-        print(f"Falha ao processar imagem, servidor não respondeu: {e}")
-        return JSONResponse(
-            status_code=503, # Service Unavailable
-            content={"erro": "Não foi possível conectar ao serviço", "error => ": str(e)}
-        )
-    except Exception as e:
-        # Erro genérico (ex: falha ao ler o arquivo, falha no base64, etc)
-        print(f"Erro inesperado: {e}")
-        return JSONResponse(status_code=500, content={"erro": "Erro interno no servidor", "error => ": str(e)})    
+        db.rollback()
+        raise
+    #         return JSONResponse(
+    #             status_code=e.response.status_code, 
+    #             content={"erro": "Falha ao processar imagem", "error => ": e.response.json()}
+    #         )
+    # except httpx.RequestError as e:
+    #         # Erro de rede (ex: timeout, não conseguiu conectar)
+    #     print(f"Falha ao processar imagem, servidor não respondeu: {e}")
+    #     return JSONResponse(
+    #         status_code=503, # Service Unavailable
+    #         content={"erro": "Não foi possível conectar ao serviço", "error => ": str(e)}
+    #     )
+    # except Exception as e:
+    #     # Erro genérico (ex: falha ao ler o arquivo, falha no base64, etc)
+    #     print(f"Erro inesperado: {e}")
+    #     return JSONResponse(status_code=500, content={"erro": "Erro interno no servidor", "error => ": str(e)})    
