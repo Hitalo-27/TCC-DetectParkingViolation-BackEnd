@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, Body, UploadFile, File
 from fastapi.responses import JSONResponse
 from PIL import Image
 from PIL.ExifTags import TAGS, GPSTAGS
 from geopy.geocoders import Nominatim
+from io import BytesIO
 import os
 
 router = APIRouter(prefix="/image", tags=["veiculos"])
@@ -123,25 +124,16 @@ def parse_address(raw_address):
 
     return addr
 
-
-@router.post("/identification")
-async def get_metadata(data: dict = Body(...)):
+# Função que vai ser chamada na rota principal        
+async def extract_image_metadata(file: UploadFile):
     try:
-        filename = data.get("filename")
-        if not filename:
-            return JSONResponse(
-                status_code=400,
-                content={"erro": "Campo 'filename' é obrigatório no corpo da requisição."},
-            )
+        # Lê bytes do arquivo enviado
+        image_bytes = await file.read()
 
-        image_path = os.path.join(IMAGE_DIR, filename)
-        if not os.path.exists(image_path):
-            return JSONResponse(
-                status_code=404,
-                content={"erro": f"Arquivo '{filename}' não encontrado em {IMAGE_DIR}"},
-            )
+        # Abre a imagem diretamente da memória
+        img = Image.open(BytesIO(image_bytes))
 
-        img = Image.open(image_path)
+        # Extrai EXIF
         exif = get_exif_data(img)
         exif_clean = clean_exif_data(exif)
 
@@ -167,17 +159,17 @@ async def get_metadata(data: dict = Body(...)):
 
                 location = {"latitude": lat, "longitude": lon}
 
-                if lat and lon:
-                    try:
-                        geolocator = Nominatim(user_agent="metadata_extractor")
-                        loc = geolocator.reverse((lat, lon), language="pt")
-                        if loc:
-                            address_data = parse_address(loc)
-                    except Exception as e:
-                        debug["geopy_error"] = str(e)
+                # Geolocalização reversa
+                try:
+                    geolocator = Nominatim(user_agent="metadata_extractor")
+                    loc = geolocator.reverse((lat, lon), language="pt")
+                    if loc:
+                        address_data = parse_address(loc)
+                except Exception as e:
+                    debug["geopy_error"] = str(e)
 
         return {
-            "arquivo": filename,
+            "arquivo": file.filename,
             "gps": location,
             "local": address_data,
             "metadados": exif_clean,
@@ -185,7 +177,7 @@ async def get_metadata(data: dict = Body(...)):
         }
 
     except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"erro": "Erro ao processar imagem", "detalhes": str(e)},
-        )
+        return {
+            "erro": "Erro ao processar imagem",
+            "detalhes": str(e)
+        }
