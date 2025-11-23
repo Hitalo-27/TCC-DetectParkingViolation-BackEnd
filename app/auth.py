@@ -17,7 +17,7 @@ pwd_context = CryptContext(schemes=["bcrypt_sha256"], deprecated="auto")
 # Config JWT
 SECRET_KEY = JWT_SECRET_KEY
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 # Para extrair token do header Authorization: Bearer <token>
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="users/login")

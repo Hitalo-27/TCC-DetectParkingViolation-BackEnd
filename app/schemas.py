@@ -58,8 +58,8 @@ class InfractionsBase(BaseModel):
     veiculo: CarBase
     endereco: AddressBase
     tipo_infracao: TypeOfInfractionBase
-    arquivo: Optional[int] = None
+    user: UserResponse
 
 class InfractionsResponse(BaseModel):
-    placa: str
+    placa: Optional[str] = None
     infracoes: List[InfractionsBase]

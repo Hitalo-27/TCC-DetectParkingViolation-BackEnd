@@ -50,7 +50,6 @@ class Infraction(Base):
     id = Column(Integer, primary_key=True)
     data = Column(DateTime)
     imagem = Column(String, nullable=True)
-    arquivo = Column(Integer, nullable=True)
 
     veiculo_id = Column(Integer, ForeignKey("veiculo.id"))
     veiculo = relationship("Car")  # agora veiculo é o objeto completo
@@ -60,3 +59,6 @@ class Infraction(Base):
 
     tipo_infracao_id = Column(Integer, ForeignKey("tipo_infracao.id"))
     tipo_infracao = relationship("TypeOfInfraction")  # objeto completo
+
+    user_id = Column(Integer, ForeignKey("users.id"))
+    user = relationship("User")  # objeto completo

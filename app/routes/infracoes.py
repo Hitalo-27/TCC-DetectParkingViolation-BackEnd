@@ -12,18 +12,29 @@ UPLOAD_DIR_RELATIVE = "uploads"
 router = APIRouter(prefix="/infracoes", tags=["infracoes"])
 @router.get("/consultar", response_model=schemas.InfractionsResponse)
 def consultar_infracoes(
-    placa: str,
+    placa: str = None,
+    user: int = None,
     db: Session = Depends(get_db),
     current_email: str = Depends(auth.get_current_user)
 ):
-    veiculo = db.query(models.Car).filter(models.Car.placa_numero == placa).first()
+    
+    # valida se placa foi fornecida
+    if placa:
+        veiculo = db.query(models.Car).filter(models.Car.placa_numero == placa).first()
 
-    if not veiculo:
-        raise HTTPException(status_code=404, detail="Nenhuma infração encontrada para esta placa")
+        if not veiculo:
+            raise HTTPException(status_code=404, detail="Nenhuma infração encontrada para esta placa")
 
-    infracoes = db.query(models.Infraction).filter(models.Infraction.veiculo_id == veiculo.id).all()
+        infracoes = db.query(models.Infraction).filter(models.Infraction.veiculo_id == veiculo.id).all()
 
-    if not infracoes:
-        raise HTTPException(status_code=404, detail="Nenhuma infração encontrada para esta placa")
+        if not infracoes:
+            raise HTTPException(status_code=404, detail="Nenhuma infração encontrada para esta placa")
 
-    return {"placa": veiculo.placa_numero, "infracoes": infracoes}
+        return {"placa": veiculo.placa_numero, "infracoes": infracoes}
+    if user:
+        infracoes = db.query(models.Infraction).filter(models.Infraction.user_id == user).all()
+
+        if not infracoes:
+            raise HTTPException(status_code=404, detail="Nenhuma infração encontrada para esta placa")
+
+        return {"infracoes": infracoes}
