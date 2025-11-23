@@ -19,7 +19,7 @@ def consultar_infracoes(
     veiculo = db.query(models.Car).filter(models.Car.placa_numero == placa).first()
 
     if not veiculo:
-        raise HTTPException(status_code=404, detail="Veículo não encontrado")
+        raise HTTPException(status_code=404, detail="Nenhuma infração encontrada para esta placa")
 
     infracoes = db.query(models.Infraction).filter(models.Infraction.veiculo_id == veiculo.id).all()
 

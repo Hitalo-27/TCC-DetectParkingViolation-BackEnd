@@ -36,6 +36,10 @@ class AddressBase(BaseModel):
     pais: str
     estado: str
     cidade: str
+    rua: str
+    numero: Optional[int] = None
+    longitude: str
+    latitude: str
 
 class CarBase(BaseModel):
     cor: str
