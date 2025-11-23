@@ -8,8 +8,7 @@ from typing import List, Dict, Tuple, Set, Any
 # ==============================================================================
 # CONFIGURAÇÃO
 # ==============================================================================
-MODEL_PATH = 'model/best.pt'
-OUTPUT_FOLDER = 'resultadoUnico'
+OUTPUT_FOLDER = 'app/detect'
 
 CLASS_NAMES = {
     0: 'calcada', 1: 'carro', 2: 'faixa_pedestre', 3: 'guia_amarela',
@@ -330,22 +329,39 @@ def validar_infracao(frame: np.ndarray, model: YOLO, image_name: str):
         h, w = frame.shape[:2]
         display_frame = frame.copy()
         
+        # Executa detecção
         results = model(frame, verbose=False)[0]
         parsed_data = parse_detections(results, w, h)
 
+        # Analisa infrações dos carros detectados
         cars = analyze_infractions(parsed_data)
+
+        # Identifica carro principal (maior área entre infratores)
+        violators = [c for c in cars if c['infractions']]
+        if violators:
+            primary_car = max(violators, key=lambda c: c['area'])
+            primary_car_id = primary_car['id']
+        else:
+            primary_car_id = None
+
+        # Marca a flag 'principal' dentro de cada infração
+        for c in cars:
+            for inf in c['infractions']:
+                inf['principal'] = (c['id'] == primary_car_id)
+
+        # Desenha visualizações no frame
         final_frame, status_key = draw_visuals(display_frame, cars, parsed_data['zones'], parsed_data['plates'])
 
-        # salva imagem anotada
+        # Salva imagem anotada
         ext = os.path.splitext(image_name)[1]
-        base_name = f"detec_{status_key}"
+        nameImage = os.path.splitext(image_name)[0]
+        base_name = f"detec_{nameImage}"
         out_path = get_unique_filename(OUTPUT_FOLDER, base_name, ext)
-
         cv2.imwrite(out_path, final_frame)
 
-        # monta JSON final
+        # Monta JSON final
         json_result = {
-            "imagem": image_name,
+            "imagem": os.path.basename(out_path),
             "status_final": status_key,
             "path_resultado": out_path,
             "classes_detectadas": list(parsed_data["detected_classes"]),

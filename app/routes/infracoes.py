@@ -94,6 +94,19 @@ async def validar_infracao_endpoint(
         if "erro" in resultado:
             return JSONResponse(status_code=500, content=resultado)
 
+        # -----------------------------
+        # Filtra apenas o carro principal
+        # -----------------------------
+        carro_principal = []
+        for carro in resultado.get("carros", []):
+            for inf in carro.get("infractions", []):
+                if inf.get("principal", False):
+                    carro_principal.append(carro)
+                    break  # adiciona apenas uma vez, mesmo se tiver várias infrações
+
+        # Substitui lista de carros pelo principal
+        resultado["carros"] = carro_principal[0]
+
         return resultado
 
     except Exception as e:
