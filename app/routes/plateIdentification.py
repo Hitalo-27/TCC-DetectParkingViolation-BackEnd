@@ -9,6 +9,7 @@ import httpx
 from app.platereq import chamando
 from app.utils.get_plate_api import get_plate_function
 from ..database import get_db
+from app.routes.imageIdentification import extract_image_metadata
 from datetime import datetime
 
 UPLOAD_DIR = "app/uploads"
@@ -24,15 +25,7 @@ GEMINI_URL = os.getenv("GEMINI_URL")
 # Body -> Multipart -> file = imagem
 @router.post("/identification")
 async def get_plate(db: Session = Depends(get_db), file: UploadFile = File(...)):
-    # return {
-    #     "hasInfraction": True,
-    #     "plate": "placa",
-    #     "location": "Rua Oscar Freire, 123",
-    #     "datetime": "date_formated",
-    #     "infraction": "Estacionamento em vaga de idoso sem credencial",
-    #     "type": "Grave",
-    # }
-    
+    # Chamar primeiramente a função que valida a infração, se não houver, nem precisa executar o resto da rota
     try:
         placa = await get_plate_function(file)
 
@@ -81,18 +74,37 @@ async def get_plate(db: Session = Depends(get_db), file: UploadFile = File(...))
         db.commit()
         db.refresh(new_car)
         
+        # Chamadando a função que pega a localização a partir dos metadados
+        local = await extract_image_metadata(file)
+        
+        if local.get('local'):
+            # Criando o endereço que vai ser relacionado com a infração (local onde ocorreu a infração)    
+            new_address_infraction = models.Address(
+                pais="Brasil",
+                estado=car_estado,
+                cidade=car_cidade
+            )
+            
+            infraction_local_street = local['local']['rua']
+            infraction_local_number = local['local']['numero']
+            
+            db.add(new_address_infraction)
+            db.commit()
+            db.refresh(new_address_infraction)
+        else:
+            infraction_local_street = 'Não localizado'
+            infraction_local_number = 'Não localizado'
+        
         print(f"Response: {new_car}")
         
         date_now = datetime.now()
         date_formated = date_now.strftime("%Y-%m-%d %H:%M")
 
-        # Chamar função que verifica infração
-        # chamar api que pega os metadados
         # Fazer um try catch decente
         return {
             "hasInfraction": True,
             "plate": placa,
-            "location": "Rua Oscar Freire, 123",
+            "location": infraction_local_street + ', ' + infraction_local_number,
             "datetime": date_formated,
             "infraction": "Estacionamento em vaga de idoso sem credencial",
             "type": "Grave",
@@ -100,18 +112,3 @@ async def get_plate(db: Session = Depends(get_db), file: UploadFile = File(...))
     except httpx.HTTPStatusError as e:
         db.rollback()
         raise
-    #         return JSONResponse(
-    #             status_code=e.response.status_code, 
-    #             content={"erro": "Falha ao processar imagem", "error => ": e.response.json()}
-    #         )
-    # except httpx.RequestError as e:
-    #         # Erro de rede (ex: timeout, não conseguiu conectar)
-    #     print(f"Falha ao processar imagem, servidor não respondeu: {e}")
-    #     return JSONResponse(
-    #         status_code=503, # Service Unavailable
-    #         content={"erro": "Não foi possível conectar ao serviço", "error => ": str(e)}
-    #     )
-    # except Exception as e:
-    #     # Erro genérico (ex: falha ao ler o arquivo, falha no base64, etc)
-    #     print(f"Erro inesperado: {e}")
-    #     return JSONResponse(status_code=500, content={"erro": "Erro interno no servidor", "error => ": str(e)})    
