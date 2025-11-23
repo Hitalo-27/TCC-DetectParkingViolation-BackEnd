@@ -8,6 +8,7 @@ import base64
 import httpx
 from app.platereq import chamando
 from app.utils.get_plate_api import get_plate_function
+from app.utils.convert_to_decimal import dms_to_decimal
 from ..database import get_db
 from app.routes.imageIdentification import extract_image_metadata
 from datetime import datetime
@@ -79,14 +80,22 @@ async def get_plate(db: Session = Depends(get_db), file: UploadFile = File(...))
         
         if local.get('local'):
             # Criando o endereço que vai ser relacionado com a infração (local onde ocorreu a infração)    
-            new_address_infraction = models.Address(
-                pais="Brasil",
-                estado=car_estado,
-                cidade=car_cidade
-            )
-            
             infraction_local_street = local['local']['rua']
             infraction_local_number = local['local']['numero']
+            
+            # Função para converter a latidude e longitude para o padrão que esperamos -**,****
+            latitude = dms_to_decimal(local['metadados']['GPSInfo']['GPSLatitude'], local['metadados']['GPSInfo']['GPSLatitudeRef'])
+            longitude = dms_to_decimal(local['metadados']['GPSInfo']['GPSLongitude'], local['metadados']['GPSInfo']['GPSLongitudeRef'])
+            
+            new_address_infraction = models.Address(
+                pais="Brasil",
+                estado=local['local']['estado'],
+                cidade=local['local']['cidade'],
+                rua=infraction_local_street,
+                numero=infraction_local_number,
+                longitude=longitude,
+                latitude=latitude
+            )
             
             db.add(new_address_infraction)
             db.commit()
