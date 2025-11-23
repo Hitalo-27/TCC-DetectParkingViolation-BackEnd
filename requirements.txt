@@ -16,3 +16,5 @@ scikit-learn
 python-multipart
 httpx
 geopy
+numpy
+opencv-python
