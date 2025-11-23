@@ -18,6 +18,10 @@ class Address(Base):
     pais = Column(String(45), index=True, nullable=False)
     estado = Column(String(80), index=True, nullable=False)
     cidade = Column(String(80), index=True, nullable=False)
+    rua = Column(String(100), nullable=False)
+    numero = Column(Integer, nullable=True)
+    longitude = Column(String(50), nullable=False)
+    latitude = Column(String(50), nullable=False)
 
     veiculos = relationship("Car", back_populates="endereco")
 
