@@ -6,7 +6,7 @@ from ..database import get_db
 import os
 import cv2
 from ultralytics import YOLO
-from app.utils.validacaoinfracoes import validar_infracao as validar_infracao_raw
+from app.controllers.validarinfracoes import validar_infracao as validar_infracao_raw
 import numpy as np
 
 MODEL_PATH = "app/models/best.pt"
