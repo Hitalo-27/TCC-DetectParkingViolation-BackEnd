@@ -41,3 +41,6 @@ def root():
 
 # Serve a pasta uploads como /uploads
 app.mount("/uploads", StaticFiles(directory="app/uploads"), name="uploads")
+
+# Serve a pasta detect como /detect
+app.mount("/detect", StaticFiles(directory="app/detect"), name="detect")
