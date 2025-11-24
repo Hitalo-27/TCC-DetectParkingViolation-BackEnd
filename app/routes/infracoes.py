@@ -40,9 +40,6 @@ def consultar_infracoes(
         return {"infracoes": infracoes}
 
 
-# -----------------------------
-# ENDPOINT POST VALIDAR
-# -----------------------------
 @router.post("/validar")
 async def validar_infracao_endpoint(
     data: dict = Body(...),
@@ -71,41 +68,7 @@ async def validar_infracao_endpoint(
                 content={"erro": "Não foi possível abrir a imagem. Arquivo pode estar corrompido."},
             )
 
-        resultado_raw = validar_infracao_raw(frame, model, filename)
-
-        # -----------------------------
-        # Converte numpy para int/float
-        # -----------------------------
-        def convert_numpy(obj):
-            if isinstance(obj, np.integer):
-                return int(obj)
-            if isinstance(obj, np.floating):
-                return float(obj)
-            if isinstance(obj, np.ndarray):
-                return obj.tolist()
-            if isinstance(obj, dict):
-                return {k: convert_numpy(v) for k, v in obj.items()}
-            if isinstance(obj, list):
-                return [convert_numpy(i) for i in obj]
-            return obj
-
-        resultado = convert_numpy(resultado_raw)
-
-        if "erro" in resultado:
-            return JSONResponse(status_code=500, content=resultado)
-
-        # -----------------------------
-        # Filtra apenas o carro principal
-        # -----------------------------
-        carro_principal = []
-        for carro in resultado.get("carros", []):
-            for inf in carro.get("infractions", []):
-                if inf.get("principal", False):
-                    carro_principal.append(carro)
-                    break  # adiciona apenas uma vez, mesmo se tiver várias infrações
-
-        # Substitui lista de carros pelo principal
-        resultado["carros"] = carro_principal[0]
+        resultado = validar_infracao_raw(frame, model, filename)
 
         return resultado
 

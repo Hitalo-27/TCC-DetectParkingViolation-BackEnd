@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+from fastapi.responses import JSONResponse
 from ultralytics import YOLO
 from math import sqrt
 import os
@@ -321,6 +322,19 @@ def process_image(frame: np.ndarray, model: YOLO) -> Tuple[np.ndarray, Set[str],
 
     return final_frame, parsed_data['detected_classes'], status_key
 
+def convert_numpy(obj):
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, np.floating):
+        return float(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, dict):
+        return {k: convert_numpy(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [convert_numpy(i) for i in obj]
+    return obj
+
 
 def validar_infracao(frame: np.ndarray, model: YOLO, image_name: str):
     try:
@@ -377,7 +391,30 @@ def validar_infracao(frame: np.ndarray, model: YOLO, image_name: str):
                 "infractions": c["infractions"]
             })
 
-        return json_result
+        resultado = convert_numpy(json_result)
+
+        if "erro" in resultado:
+            return JSONResponse(status_code=500, content=resultado)
+
+        # -----------------------------
+        # Filtra apenas o carro principal
+        # -----------------------------
+        carro_principal = []
+
+        for carro in resultado.get("carros", []):
+            for inf in carro.get("infractions", []):
+                if inf.get("principal", False):
+                    carro_principal.append(carro)
+                    break  # adiciona apenas uma vez, mesmo se tiver várias infrações
+
+        # Se não houver carro principal, tenta pegar o primeiro carro
+        if not carro_principal and resultado.get("carros"):
+            carro_principal.append(resultado["carros"][0])
+
+        # Atualiza a lista de carros ou deixa vazia
+        resultado["carros"] = carro_principal[0] if carro_principal else []
+
+        return resultado
 
     except Exception as e:
         return {
