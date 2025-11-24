@@ -399,20 +399,25 @@ def validar_infracao(frame: np.ndarray, model: YOLO, image_name: str):
         # -----------------------------
         # Filtra apenas o carro principal
         # -----------------------------
-        carro_principal = []
+        carro_principal = None
 
         for carro in resultado.get("carros", []):
             for inf in carro.get("infractions", []):
                 if inf.get("principal", False):
-                    carro_principal.append(carro)
-                    break  # adiciona apenas uma vez, mesmo se tiver várias infrações
+                    carro_principal = carro
+                    break  # já encontrou um principal
+            if carro_principal:
+                break  # interrompe se achou o principal
 
-        # Se não houver carro principal, tenta pegar o primeiro carro
+        # Se não houver carro principal, pega o primeiro carro da lista
         if not carro_principal and resultado.get("carros"):
-            carro_principal.append(resultado["carros"][0])
+            carro_principal = resultado["carros"][0]
 
-        # Atualiza a lista de carros ou deixa vazia
-        resultado["carros"] = carro_principal[0] if carro_principal else []
+        # Cria a chave 'carro' com o carro principal ou lista vazia
+        resultado["carro"] = carro_principal if carro_principal else []
+
+        # Remove a lista original de carros
+        resultado.pop("carros", None)
 
         return resultado
 
