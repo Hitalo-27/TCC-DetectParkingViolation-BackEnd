@@ -62,3 +62,13 @@ class Infraction(Base):
 
     user_id = Column(Integer, ForeignKey("users.id"))
     user = relationship("User")  # objeto completo
+
+class Notification(Base):
+    __tablename__ = "notificacao"
+
+    id = Column(Integer, primary_key=True, index=True)
+    mensagem = Column(String(500), nullable=False)
+    data = Column(DateTime, nullable=False)
+
+    user_id = Column(Integer, ForeignKey("users.id"))
+    user = relationship("User")

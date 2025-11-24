@@ -63,3 +63,12 @@ class InfractionsBase(BaseModel):
 class InfractionsResponse(BaseModel):
     placa: Optional[str] = None
     infracoes: List[InfractionsBase]
+
+class NotificationCreate(BaseModel):
+    mensagem: str
+    data: datetime
+    user_id: int
+class NotificationBase(BaseModel):
+    mensagem: str
+    data: datetime
+    user: UserResponse
