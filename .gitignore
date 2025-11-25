@@ -4,3 +4,5 @@ __pycache__/
 AccessALPR/detector/alpr-weights.zip
 AccessALPR/weights/detector-w.pth
 AccessALPR/venv
+app/uploads
+app/detect
