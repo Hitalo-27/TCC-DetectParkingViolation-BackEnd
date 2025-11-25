@@ -135,7 +135,7 @@ async def get_plate(db: Session = Depends(get_db), file: UploadFile = File(...),
                 date_formated = date_now.strftime("%Y-%m-%d %H:%M")
                 
                 infraction = models.Infraction(
-                    imagem='/uploads/' + file.filename,
+                    imagem='/detect/' + isInfraction.get("imagem"),
                     data=date_now,
                     veiculo_id=new_car.id,
                     endereco_id=new_address_infraction.id,
