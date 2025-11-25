@@ -42,10 +42,10 @@ class AddressBase(BaseModel):
     latitude: str
 
 class CarBase(BaseModel):
-    cor: str
-    placa_numero: str
+    cor: Optional[str] = None
+    placa_numero: Optional[str] = None
     origem: str
-    endereco_id: int
+    endereco_id: Optional[int] = None
 
 class TypeOfInfractionBase(BaseModel):
     gravidade: str
@@ -56,7 +56,7 @@ class InfractionsBase(BaseModel):
     data: datetime
     imagem: Optional[str] = None
     veiculo: CarBase
-    endereco: AddressBase
+    endereco: Optional[AddressBase] = None
     tipo_infracao: TypeOfInfractionBase
     user: UserResponse
 

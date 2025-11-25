@@ -1,173 +1,276 @@
 from fastapi import APIRouter, File, UploadFile, Depends
 from fastapi.responses import JSONResponse
-from .. import schemas, models, auth
+from ultralytics import YOLO
 from sqlalchemy.orm import Session
+from datetime import datetime
 import os
+import cv2
 from dotenv import load_dotenv
-import base64
-import httpx
-from app.platereq import chamando
+
+# Importações internas
+from .. import schemas, models, auth
+from ..database import get_db
+from app.platereq import dadosveiculo
 from app.utils.get_plate_api import get_plate_function
 from app.utils.convert_to_decimal import dms_to_decimal
-from ..database import get_db
 from app.routes.imageIdentification import extract_image_metadata
-from app.routes.infracoes import validar_infracao
-from datetime import datetime
+from app.controllers.validarinfracoes import validar_infracao as validar_infracao_raw
 
+# Configurações Iniciais
+load_dotenv()
 UPLOAD_DIR = "app/uploads"
-UPLOAD_DIR_RELATIVE = "uploads"
+MODEL_PATH = "app/models/best.pt"
 
+# Inicialização do Modelo
+model = YOLO(MODEL_PATH)
 router = APIRouter(prefix="/plate", tags=["veiculos"])
 
-load_dotenv()
+# ---------------------------------------------------------
+# FUNÇÕES AUXILIARES (HELPERS)
+# ---------------------------------------------------------
 
-GEMINI_API_KEY = os.getenv("GEMINI_KEY")
-GEMINI_URL = os.getenv("GEMINI_URL")
+def ensure_upload_dir_exists():
+    """Garante que a pasta de uploads existe."""
+    if not os.path.exists(UPLOAD_DIR):
+        os.makedirs(UPLOAD_DIR)
 
-# Body -> Multipart -> file = imagem
+async def save_uploaded_file(file: UploadFile) -> str:
+    """Salva o arquivo no disco."""
+    ensure_upload_dir_exists()
+    
+    original_name = file.filename
+    name, ext = os.path.splitext(original_name)
+    saved_path = os.path.join(UPLOAD_DIR, original_name)
+
+    counter = 1
+    while os.path.exists(saved_path):
+        new_name = f"{name}_{counter}{ext}"
+        saved_path = os.path.join(UPLOAD_DIR, new_name)
+        counter += 1
+
+    with open(saved_path, "wb") as f:
+        f.write(await file.read())
+        
+    return saved_path
+
+def get_or_create_vehicle(db: Session, placa: str, cor: str) -> models.Car:
+    """
+    Verifica se o carro já existe no banco.
+    - Se existir: Retorna o objeto do carro existente.
+    - Se NÃO existir: Consulta a API externa, cria o endereço do dono e o carro novo.
+    """
+    
+    # 1. TENTA BUSCAR NO BANCO EXISTENTE
+    existing_car = None
+
+    if(placa != "Não Identificada"):
+        existing_car = db.query(models.Car).filter(models.Car.placa_numero == placa).first()
+
+    if existing_car:
+        return existing_car
+
+    # 2. SE NÃO EXISTE, BUSCA NA API E CRIA
+    print(f"Carro {placa} não encontrado. Buscando dados na API externa...")
+    car_info = dadosveiculo(placa)
+
+    # --- CORREÇÃO AQUI: Inicializa a variável como None antes do IF ---
+    owner_address = None 
+    # ------------------------------------------------------------------
+
+    color_car = cor  # Usa a cor identificada pela IA por padrão
+    if car_info.get('veiculos'):
+        # Caso de sucesso: extrai dados e CRIA endereço
+        veic = car_info.get('veiculos', {})
+        color_car = veic.get('cd_cor_veiculo', 'Desconhecida')
+        car_estado = veic.get('sg_uf', 'BR')
+        car_cidade = veic.get('cd_municipio', '').strip()
+        
+        # Cria e salva o endereço
+        owner_address = models.Address(
+            pais="Brasil",
+            estado=car_estado,
+            cidade=car_cidade
+        )    
+        db.add(owner_address)
+        db.commit()
+        db.refresh(owner_address)
+
+    # Cria o novo carro
+    new_car = models.Car(
+        cor=color_car,
+        placa_numero=placa,
+        origem="API_Externa",
+        # Agora isso funciona pois owner_address é None (se deu erro) ou o Objeto (se deu certo)
+        endereco_id=owner_address.id if owner_address else None
+    )
+    db.add(new_car)
+    db.commit()
+    db.refresh(new_car)
+    
+    return new_car
+
+def register_infraction_location_db(db: Session, metadata: dict) -> models.Address:
+    """Registra o local onde a infração ocorreu."""
+    local_info = metadata.get('local', {})
+    gps_info = metadata.get('metadados', {}).get('GPSInfo', {})
+
+    if local_info:
+        rua = local_info.get('rua')
+        numero = local_info.get('numero')
+        estado = local_info.get('estado')
+        cidade = local_info.get('cidade')
+        
+        lat = dms_to_decimal(gps_info.get('GPSLatitude'), gps_info.get('GPSLatitudeRef'))
+        lon = dms_to_decimal(gps_info.get('GPSLongitude'), gps_info.get('GPSLongitudeRef'))
+    else:
+        rua = 'Não localizado'
+        numero = 0
+        estado = 'Não localizado'
+        cidade = 'Não localizado'
+        lat = 0
+        lon = 0
+
+    infraction_address = models.Address(
+        pais="Brasil",
+        estado=estado,
+        cidade=cidade,
+        rua=rua,
+        numero=numero,
+        longitude=lon,
+        latitude=lat
+    )
+    db.add(infraction_address)
+    db.commit()
+    db.refresh(infraction_address)
+    
+    return infraction_address
+
+def create_infraction_record(db: Session, image_path: str, car_id: int, address_id: int, type_id: int, user_id: int):
+    """Cria o registro final da infração."""
+    date_now = datetime.now()
+    
+    infraction = models.Infraction(
+        imagem='/detect/' + image_path,
+        data=date_now,
+        veiculo_id=car_id,
+        endereco_id=address_id,
+        tipo_infracao_id=type_id,
+        user_id=user_id
+    )
+    db.add(infraction)
+    db.commit()
+    db.refresh(infraction)
+    return infraction
+
+# ---------------------------------------------------------
+# ROTA PRINCIPAL
+# ---------------------------------------------------------
+
 @router.post("/identification")
-async def get_plate(db: Session = Depends(get_db), file: UploadFile = File(...), current_email: str = Depends(auth.get_current_user)):
-    user = db.query(models.User).filter(models.User.email == current_email).first()
-
+async def get_plate(
+    db: Session = Depends(get_db),
+    file: UploadFile = File(...),
+    current_email: str = Depends(auth.get_current_user)
+):
     try:
-        isInfraction = await validar_infracao(file)
+        # 1. Identificar Usuário
+        user = db.query(models.User).filter(models.User.email == current_email).first()
+        if not user:
+            return JSONResponse(status_code=404, content={"success": False, "message": "Usuário não encontrado."})
+
+        # 2. Salvar Imagem
+        try:
+            saved_path = await save_uploaded_file(file)
+            filename = os.path.basename(saved_path)
+        except Exception as e:
+            return JSONResponse(status_code=500, content={"success": False, "message": f"Erro ao salvar arquivo: {str(e)}"})
+
+        # 3. Carregar com OpenCV
+        frame = cv2.imread(saved_path)
+        if frame is None:
+            return JSONResponse(status_code=400, content={"success": False, "message": "Imagem corrompida ou inválida."})
+
+        # 4. Detecção de Infrações (YOLO)
+        detection_result = validar_infracao_raw(frame, model, filename)
+        car_details = detection_result.get("carro", [])
+
+        if not car_details:
+            return {"success": True, "message": "Nenhum carro identificado na imagem."}
+
+        # Verifica se há infração
+        has_infraction = car_details.get("tem_infracao", False)
         
-        car_deatils = isInfraction.get("carro")
-        
-        if car_deatils == []:
-            return {
-                "response": "Sem carro identificado"
-            }
-        # Quando detecta um carro
-        if car_deatils.get("tem_infracao"):
+        if not has_infraction:
+            return {"success": True, "data": None, "message": "Carro detectado, mas sem infração identificada."}
+
+        # -----------------------------------------------------
+        # PROCESSAMENTO DA INFRAÇÃO
+        # -----------------------------------------------------
+        try:
+            # Identificar tipo de infração no DB
+            infraction_desc = car_details.get("infractions", [{}])[0].get("tipo")
+            infraction_type_obj = db.query(models.TypeOfInfraction).filter(
+                models.TypeOfInfraction.descricao == infraction_desc
+            ).first()
+
+            if not infraction_type_obj:
+                return {"success": False, "message": f"Tipo de infração '{infraction_desc}' não cadastrado no sistema."}
+
+            # Ler a placa (Resetando o cursor)
+            await file.seek(0)
+            retornoIa = await get_plate_function(file)
+            placa = retornoIa.get("placa", "Não informado")
+            cor = retornoIa.get("cor", "Não informado")
             
-            # Buscando a infração
-            infraction_type = db.query(models.TypeOfInfraction).filter(models.TypeOfInfraction.descricao == car_deatils.get("infractions", [{}])[0].get("tipo")).first()
-        
-            try:
-                # Resetando o file porquê se não dar erro na leitura da função (depois passar o file já lido)
-                await file.seek(0)
-                # Pegando a placa
-                placa = await get_plate_function(file)
-                
-                print("EPA 2")
-                car_information = chamando(placa)
-                # Caso encontre as informações do carro através da placa
-                if car_information.get('error'):
-                    color_car = 'Não encontrado'
-                    car_estado = "Não identificado"
-                    car_cidade = "Não identificado"            
-                    
-                else:
-                    color_car = car_information['veiculos']['cd_cor_veiculo']
-                    car_estado = car_information['veiculos']['sg_uf']
-                    car_cidade = car_information['veiculos']['cd_municipio'].strip()
-                    
-                car_address = models.Address(
-                    pais="Brasil",
-                    estado=car_estado,
-                    cidade=car_cidade
-                )    
-                
-                db.add(car_address)
+            # -----------------------------------------------------------
+            # MUDANÇA AQUI: Busca carro existente ou cria um novo
+            # -----------------------------------------------------------
+            car_obj = get_or_create_vehicle(db, placa, cor)
 
-                db.commit()
+            # Extrair Metadados e Localização
+            await file.seek(0)
+            metadata = await extract_image_metadata(file)
+            
+            # Salvar Local da Infração no DB
+            infraction_address = register_infraction_location_db(db, metadata)
 
-                db.refresh(car_address)
+            # Criar Registro da Infração relacionando com o ID do carro obtido
+            final_infraction = create_infraction_record(
+                db=db,
+                image_path=detection_result.get("imagem"),
+                car_id=car_obj.id,  # Usa o ID do carro recuperado ou criado
+                address_id=infraction_address.id,
+                type_id=infraction_type_obj.id,
+                user_id=user.id
+            )
 
-                address_id = car_address.id
-                
-                new_car = models.Car(
-                    cor=color_car,
-                    placa_numero=placa,
-                    origem="teste",
-                    endereco_id=address_id
-                )
-                        
-                db.add(new_car)
-                db.commit()
-                db.refresh(new_car)
-                
-                new_car.id
-                
-                # Chamadando a função que pega a localização a partir dos metadados
-                local = await extract_image_metadata(file)
-                print("EPA 3 ", local)
-                if local.get('local'):
-                    # Criando o endereço que vai ser relacionado com a infração (local onde ocorreu a infração)    
-                    infraction_local_street = local['local']['rua']
-                    infraction_local_number = local['local']['numero']
-                    
-                    # Função para converter a latidude e longitude para o padrão que esperamos -**,****
-                    latitude = dms_to_decimal(local['metadados']['GPSInfo']['GPSLatitude'], local['metadados']['GPSInfo']['GPSLatitudeRef'])
-                    longitude = dms_to_decimal(local['metadados']['GPSInfo']['GPSLongitude'], local['metadados']['GPSInfo']['GPSLongitudeRef'])
-                    
-                    new_address_infraction = models.Address(
-                        pais="Brasil",
-                        estado=local['local']['estado'],
-                        cidade=local['local']['cidade'],
-                        rua=infraction_local_street,
-                        numero=infraction_local_number,
-                        longitude=longitude,
-                        latitude=latitude
-                    )
-                    
-                else:
-                    infraction_local_street = 'Não localizado'
-                    infraction_local_number = 0
-                    
-                    new_address_infraction = models.Address(
-                        pais="Brasil",
-                        estado=infraction_local_street,
-                        cidade=infraction_local_street,
-                        rua=infraction_local_street,
-                        numero=infraction_local_number,
-                        longitude=0,
-                        latitude=0
-                    )
-
-                    
-                db.add(new_address_infraction)
-                db.commit()
-                db.refresh(new_address_infraction)                    
-                    
-                date_now = datetime.now()
-                date_formated = date_now.strftime("%Y-%m-%d %H:%M")
-                
-                infraction = models.Infraction(
-                    imagem='/detect/' + isInfraction.get("imagem"),
-                    data=date_now,
-                    veiculo_id=new_car.id,
-                    endereco_id=new_address_infraction.id,
-                    tipo_infracao_id=infraction_type.id,
-                    user_id=user.id
-                )
-
-                db.add(infraction)
-                db.commit()
-                db.refresh(infraction) 
-                print("EPA 4")
-                # Fazer um try catch decente
-                return {
-                    "hasInfraction": True,
-                    "plate": placa,
-                    "location": infraction_local_street + ', ' + str(infraction_local_number),
-                    "datetime": date_formated,
-                    "infraction": car_deatils.get("infractions", [{}])[0].get("tipo"),
-                    "type": infraction_type.gravidade,
-                }                                                  
-            except Exception as e:
-                return {
-                    "response": "Erro na hora de identificar a infração",
-                    "erro": str(e)
-                }
-        else:
-            # detectou o carro mas não tinha nenhuma infração
+            # Formatar Resposta
             return {
-                "response": "Sem infração identificada"
+                "success": True,
+                "message": "Infração registrada com sucesso.",
+                "hasInfraction": True,
+                "data": {
+                    "plate": placa,
+                    "location": f"{infraction_address.rua}, {infraction_address.numero}",
+                    "datetime": final_infraction.data.strftime("%Y-%m-%d %H:%M"),
+                    "infraction": infraction_desc,
+                    "gravity": infraction_type_obj.gravidade,
+                    "infraction_id": final_infraction.id,
+                    "imagem": final_infraction.imagem
+                }
             }
+
+        except Exception as e:
+            print(f"Erro no processamento da infração: {e}")
+            return {
+                "success": False,
+                "message": "Erro ao processar os dados da infração.",
+                "error_details": str(e)
+            }
+
     except Exception as e:
         return {
-            "response": "Foi de base",
-            "erro": str(e)
+            "success": False,
+            "message": "Erro interno no servidor.",
+            "error_details": str(e)
         }

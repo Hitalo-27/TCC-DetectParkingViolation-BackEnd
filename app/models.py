@@ -29,11 +29,11 @@ class Car(Base):
     __tablename__ = "veiculo"
 
     id = Column(Integer, primary_key=True, index=True)
-    cor = Column(String(30), index=True, nullable=False)
-    placa_numero = Column(String(7), index=True, nullable=False)
+    cor = Column(String(30), index=True, nullable=True)
+    placa_numero = Column(String(7), index=True, nullable=True)
     origem = Column(String(45), index=True, nullable=False)
 
-    endereco_id = Column(Integer, ForeignKey("endereco.id"), nullable=False)
+    endereco_id = Column(Integer, ForeignKey("endereco.id"), nullable=True)
 
     endereco = relationship("Address", back_populates="veiculos")
 
@@ -54,7 +54,7 @@ class Infraction(Base):
     veiculo_id = Column(Integer, ForeignKey("veiculo.id"))
     veiculo = relationship("Car")  # agora veiculo é o objeto completo
 
-    endereco_id = Column(Integer, ForeignKey("endereco.id"))
+    endereco_id = Column(Integer, ForeignKey("endereco.id"), nullable=True)
     endereco = relationship("Address")  # objeto completo
 
     tipo_infracao_id = Column(Integer, ForeignKey("tipo_infracao.id"))

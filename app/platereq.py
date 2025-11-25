@@ -12,7 +12,7 @@ API_URL = os.getenv("RADARCONSULTAS_URL")
 USERNAME =  os.getenv("RADAR_NAME")
 PASSWORD = os.getenv("RADAR_PASSWORD")
 
-def chamando(placa: str) -> Dict[str, Any]:
+def dadosveiculo(placa: str) -> Dict[str, Any]:
     """
     Envia POST para a API externa com JSON {"placa": placa}
     usando autenticação Basic Auth.

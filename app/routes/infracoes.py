@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Body, File, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Body
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from .. import schemas, models, auth
@@ -41,39 +41,34 @@ def consultar_infracoes(
 
 
 @router.post("/validar")
-async def validar_infracao_endpoint(
-    # data: dict = Body(...),
-    file: UploadFile = File(...),
+async def validar_infracao(
+    data: dict = Body(...),
     db: Session = Depends(get_db),
     current_email: str = Depends(auth.get_current_user)
 ):
-    
     try:
-        # filename = data.get("filename")
-        # if not filename:
-        #     return JSONResponse(
-        #         status_code=400,
-        #         content={"erro": "Campo 'filename' é obrigatório no corpo da requisição."},
-        #     )
+        filename = data.get("filename")
+        if not filename:
+            return JSONResponse(
+                status_code=400,
+                content={"erro": "Campo 'filename' é obrigatório no corpo da requisição."},
+            )
 
-        # image_path = os.path.join(UPLOAD_DIR, filename)
-        # if not os.path.exists(image_path):
-        #     return JSONResponse(
-        #         status_code=404,
-        #         content={"erro": f"Arquivo '{filename}' não encontrado em {UPLOAD_DIR}"},
-        #     )
-        image_bytes = await file.read()
-        np_arr = np.frombuffer(image_bytes, np.uint8)
-        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-        # frame = cv2.imread(file)
-        
+        image_path = os.path.join(UPLOAD_DIR, filename)
+        if not os.path.exists(image_path):
+            return JSONResponse(
+                status_code=404,
+                content={"erro": f"Arquivo '{filename}' não encontrado em {UPLOAD_DIR}"},
+            )
+
+        frame = cv2.imread(image_path)
         if frame is None:
             return JSONResponse(
                 status_code=400,
                 content={"erro": "Não foi possível abrir a imagem. Arquivo pode estar corrompido."},
             )
 
-        resultado = validar_infracao_raw(frame, model, 'teste.png')
+        resultado = validar_infracao_raw(frame, model, filename)
 
         return resultado
 
@@ -82,25 +77,3 @@ async def validar_infracao_endpoint(
             status_code=500,
             content={"erro": "Erro ao processar imagem", "detalhes": str(e)},
         )
-        
-async def validar_infracao(file: UploadFile):
-    try:
-        image_bytes = await file.read()
-        np_arr = np.frombuffer(image_bytes, np.uint8)
-        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-        
-        if frame is None:
-            return JSONResponse(
-                status_code=400,
-                content={"erro": "Não foi possível abrir a imagem. Arquivo pode estar corrompido."},
-            )
-
-        resultado = validar_infracao_raw(frame, model, 'teste.png')
-
-        return resultado
-
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"erro": "Erro ao processar imagem", "detalhes": str(e)},
-        )    
