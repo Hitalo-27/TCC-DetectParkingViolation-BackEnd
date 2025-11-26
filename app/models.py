@@ -48,7 +48,7 @@ class TypeOfInfraction(Base):
 class Infraction(Base):
     __tablename__ = "infracoes"
     id = Column(Integer, primary_key=True)
-    data = Column(DateTime)
+    data = Column(DateTime, nullable=True)
     imagem = Column(String, nullable=True)
 
     veiculo_id = Column(Integer, ForeignKey("veiculo.id"))

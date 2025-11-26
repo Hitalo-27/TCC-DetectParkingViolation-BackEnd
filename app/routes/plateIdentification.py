@@ -143,7 +143,7 @@ def register_infraction_location_db(db: Session, metadata: dict) -> models.Addre
     
     return infraction_address
 
-def create_infraction_record(db: Session, image_path: str, car_id: int, address_id: int | None, type_id: int, user_id: int, data_infraction: str):
+def create_infraction_record(db: Session, image_path: str, car_id: int, address_id: int | None, type_id: int, user_id: int, data_infraction: str | None):
     """Cria o registro final da infração."""
     
     infraction = models.Infraction(
@@ -239,7 +239,7 @@ async def get_plate(
                 address_id=infraction_address.id if infraction_address else None,
                 type_id=infraction_type_obj.id,
                 user_id=user.id,
-                data_infraction=metadata.get('metadados', {}).get('DateTime', ''),
+                data_infraction=metadata.get('metadados', {}).get('DateTime', '') if metadata.get('metadados', {}).get('DateTime', '') else None
             )
 
             infraction_data = schemas.InfractionsBase(

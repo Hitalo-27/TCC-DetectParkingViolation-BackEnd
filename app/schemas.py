@@ -62,7 +62,7 @@ class TypeOfInfractionBase(BaseModel):
         from_attributes = True
 
 class InfractionsBase(BaseModel):
-    data: datetime
+    data: Optional[datetime] = None
     imagem: Optional[str] = None
     veiculo: CarBase
     endereco: Optional[AddressBase] = None
