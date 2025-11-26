@@ -41,16 +41,25 @@ class AddressBase(BaseModel):
     longitude: str
     latitude: str
 
+    class Config:
+        from_attributes = True
+
 class CarBase(BaseModel):
     cor: Optional[str] = None
     placa_numero: Optional[str] = None
     origem: str
     endereco_id: Optional[int] = None
 
+    class Config:
+        from_attributes = True
+
 class TypeOfInfractionBase(BaseModel):
     gravidade: str
     pontos: int
     descricao: str
+
+    class Config:
+        from_attributes = True
 
 class InfractionsBase(BaseModel):
     data: datetime
@@ -60,15 +69,25 @@ class InfractionsBase(BaseModel):
     tipo_infracao: TypeOfInfractionBase
     user: UserResponse
 
+    class Config:
+        from_attributes = True
+
 class InfractionsResponse(BaseModel):
     placa: Optional[str] = None
     infracoes: List[InfractionsBase]
+
+    class Config:
+        from_attributes = True
 
 class NotificationCreate(BaseModel):
     mensagem: str
     data: datetime
     user_id: int
+
 class NotificationBase(BaseModel):
     mensagem: str
     data: datetime
     user: UserResponse
+
+    class Config:
+        from_attributes = True

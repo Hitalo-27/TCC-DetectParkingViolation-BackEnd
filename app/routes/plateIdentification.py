@@ -1,5 +1,6 @@
 from fastapi import APIRouter, File, UploadFile, Depends
 from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder # Importação necessária para serializar o Pydantic
 from ultralytics import YOLO
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -73,9 +74,7 @@ def get_or_create_vehicle(db: Session, placa: str, cor: str) -> models.Car:
     print(f"Carro {placa} não encontrado. Buscando dados na API externa...")
     car_info = dadosveiculo(placa)
 
-    # --- CORREÇÃO AQUI: Inicializa a variável como None antes do IF ---
     owner_address = None 
-    # ------------------------------------------------------------------
 
     color_car = cor  # Usa a cor identificada pela IA por padrão
     if car_info.get('veiculos'):
@@ -100,7 +99,6 @@ def get_or_create_vehicle(db: Session, placa: str, cor: str) -> models.Car:
         cor=color_car,
         placa_numero=placa,
         origem="API_Externa",
-        # Agora isso funciona pois owner_address é None (se deu erro) ou o Objeto (se deu certo)
         endereco_id=owner_address.id if owner_address else None
     )
     db.add(new_car)
@@ -145,13 +143,12 @@ def register_infraction_location_db(db: Session, metadata: dict) -> models.Addre
     
     return infraction_address
 
-def create_infraction_record(db: Session, image_path: str, car_id: int, address_id: int, type_id: int, user_id: int):
+def create_infraction_record(db: Session, image_path: str, car_id: int, address_id: int | None, type_id: int, user_id: int, data_infraction: str):
     """Cria o registro final da infração."""
-    date_now = datetime.now()
     
     infraction = models.Infraction(
         imagem='/detect/' + image_path,
-        data=date_now,
+        data=data_infraction,
         veiculo_id=car_id,
         endereco_id=address_id,
         tipo_infracao_id=type_id,
@@ -222,42 +219,43 @@ async def get_plate(
             placa = retornoIa.get("placa", "Não informado")
             cor = retornoIa.get("cor", "Não informado")
             
-            # -----------------------------------------------------------
-            # MUDANÇA AQUI: Busca carro existente ou cria um novo
-            # -----------------------------------------------------------
+            # Busca carro existente ou cria um novo
             car_obj = get_or_create_vehicle(db, placa, cor)
 
             # Extrair Metadados e Localização
             await file.seek(0)
             metadata = await extract_image_metadata(file)
-            
-            # Salvar Local da Infração no DB
-            infraction_address = register_infraction_location_db(db, metadata)
 
-            # Criar Registro da Infração relacionando com o ID do carro obtido
+            infraction_address = None
+            if metadata.get('local', {}):
+                # Salvar Local da Infração no DB
+                infraction_address = register_infraction_location_db(db, metadata)
+
+            # Criar Registro da Infração
             final_infraction = create_infraction_record(
                 db=db,
                 image_path=detection_result.get("imagem"),
-                car_id=car_obj.id,  # Usa o ID do carro recuperado ou criado
-                address_id=infraction_address.id,
+                car_id=car_obj.id,
+                address_id=infraction_address.id if infraction_address else None,
                 type_id=infraction_type_obj.id,
-                user_id=user.id
+                user_id=user.id,
+                data_infraction=metadata.get('metadados', {}).get('DateTime', ''),
             )
 
-            # Formatar Resposta
+            infraction_data = schemas.InfractionsBase(
+                data=final_infraction.data,
+                imagem=final_infraction.imagem,
+                veiculo=schemas.CarBase.model_validate(car_obj),
+                endereco=schemas.AddressBase.model_validate(infraction_address) if infraction_address else None,
+                tipo_infracao=schemas.TypeOfInfractionBase.model_validate(infraction_type_obj),
+                user=schemas.UserResponse.model_validate(user)
+            )
+
             return {
                 "success": True,
                 "message": "Infração registrada com sucesso.",
                 "hasInfraction": True,
-                "data": {
-                    "plate": placa,
-                    "location": f"{infraction_address.rua}, {infraction_address.numero}",
-                    "datetime": final_infraction.data.strftime("%Y-%m-%d %H:%M"),
-                    "infraction": infraction_desc,
-                    "gravity": infraction_type_obj.gravidade,
-                    "infraction_id": final_infraction.id,
-                    "imagem": final_infraction.imagem
-                }
+                "data": jsonable_encoder(infraction_data)
             }
 
         except Exception as e:
