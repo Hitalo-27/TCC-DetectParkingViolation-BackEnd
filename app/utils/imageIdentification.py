@@ -1,12 +1,8 @@
-from fastapi import APIRouter, Body, UploadFile, File
-from fastapi.responses import JSONResponse
+from fastapi import UploadFile
 from PIL import Image
 from PIL.ExifTags import TAGS, GPSTAGS
 from geopy.geocoders import Nominatim
 from io import BytesIO
-import os
-
-router = APIRouter(prefix="/image", tags=["veiculos"])
 
 # Caminho base onde as imagens estão salvas
 IMAGE_DIR = "app/images"  # ajuste conforme seu projeto

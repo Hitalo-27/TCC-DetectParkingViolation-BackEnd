@@ -14,7 +14,7 @@ from ..database import get_db
 from app.platereq import dadosveiculo
 from app.utils.get_plate_api import get_plate_function
 from app.utils.convert_to_decimal import dms_to_decimal
-from app.routes.imageIdentification import extract_image_metadata
+from app.utils.imageIdentification import extract_image_metadata
 from app.controllers.validarinfracoes import validar_infracao as validar_infracao_raw
 
 # Configurações Iniciais
