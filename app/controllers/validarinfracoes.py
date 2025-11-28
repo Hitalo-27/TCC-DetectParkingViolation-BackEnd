@@ -19,7 +19,13 @@ CLASS_NAMES = {
 VEHICLE_CLASS = 'carro'
 RELATIONAL_CLASS = 'placa_proibido'
 
-PROHIBITED_ZONES = [
+#O que o sistema vai RECONHECER e DESENHAR
+ALL_GROUND_CLASSES = [
+    'calcada', 'faixa_pedestre', 'guia_amarela', 'guia_normal', 
+    'guia_rebaixada', 'rampa'
+]
+
+INFRACTION_ZONES = [
     'calcada', 'faixa_pedestre'
 ]
 
@@ -32,8 +38,7 @@ DILATION_KERNEL_SIZE = 15
 
 THRESHOLDS = {
     'calcada': 60,
-    'faixa_pedestre': 15,
-    'outros': 50
+    'faixa_pedestre': 15
 }
 
 #Parametros
@@ -127,13 +132,13 @@ def parse_detections(results, w: int, h: int) -> Dict:
 
         obj_data = {'bbox': bbox, 'mask': mask_resized}
 
-        if class_name == VEHICLE_CLASS:
-            data['cars'].append(obj_data)
-        elif class_name in PROHIBITED_ZONES:
+        if class_name == VEHICLE_CLASS: data['cars'].append(obj_data)
+        
+        elif class_name in ALL_GROUND_CLASSES:
             if class_name not in data['zones']: data['zones'][class_name] = []
             data['zones'][class_name].append(mask_resized)
-        elif class_name == RELATIONAL_CLASS:
-            data['plates'].append(obj_data)
+            
+        elif class_name == RELATIONAL_CLASS: data['plates'].append(obj_data)
     
     return data
 
@@ -179,6 +184,9 @@ def check_ground_violations(car: Dict, zones: Dict):
     best_violation = None
     
     for cls_name, masks in zones.items():
+        if cls_name not in INFRACTION_ZONES:
+            continue
+
         combined_zone = np.zeros_like(car['mask'], dtype=bool)
         for m in masks: combined_zone = np.logical_or(combined_zone, m)
 
@@ -253,15 +261,9 @@ def draw_visuals(frame: np.ndarray, cars: List[Dict], zones: Dict, plates: List[
         is_violator = bool(car['infractions'])
         
         if is_primary:
-            if is_violator:
-                color = (0, 0, 255) 
-            else:
-                color = (0, 255, 0) 
+            color = (0, 0, 255) if is_violator else (0, 255, 0)
         else:
-            if is_violator:
-                color = (0, 255, 255) 
-            else:
-                color = (0, 255, 0) 
+            color = (0, 255, 255) if is_violator else (0, 255, 0)
 
         line2 = "OK"
         line1 = ""
@@ -282,10 +284,15 @@ def draw_visuals(frame: np.ndarray, cars: List[Dict], zones: Dict, plates: List[
         if line1:
             cv2.putText(frame, line1, (x1, y1 - 35), font, 0.5, color, 1)
 
+    # Cores para todas as classes que serão desenhadas
     zone_colors = {
-        'calcada': (0, 255, 255), 'faixa_pedestre': (255, 0, 255),
-        'guia_amarela': (0, 165, 255), 'guia_rebaixada': (255, 255, 0),
-        'rampa': (128, 0, 128), 'default': (255, 0, 0)
+        'calcada': (0, 255, 255),         # Amarelo/Ciano
+        'faixa_pedestre': (255, 0, 255),  # Magenta
+        'guia_amarela': (0, 165, 255),    # Laranja
+        'guia_rebaixada': (255, 255, 0),  # Azul claro (BGR)
+        'guia_normal': (255,0,0),         # Azul escuro
+        'rampa': (128, 0, 128),           # Roxo
+        'default': (100, 100, 100)        # Cinza
     }
     
     for cls_name, masks in zones.items():
