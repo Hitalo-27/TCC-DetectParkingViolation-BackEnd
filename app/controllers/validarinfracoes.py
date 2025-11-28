@@ -23,19 +23,23 @@ PROHIBITED_ZONES = [
     'calcada', 'faixa_pedestre', 'guia_amarela', 'guia_rebaixada', 'rampa'
 ]
 
+# Configuração para FAIXA DE PEDESTRE
+MASK_PERCENTAGE_FAIXA = 0.60  
+
+# Configuração para CALÇADA
+MASK_PERCENTAGE_CALCADA = 0.15 
+DILATION_KERNEL_SIZE = 15 
+
 THRESHOLDS = {
-    'calcada': 50,
+    'calcada': 60,
     'faixa_pedestre': 15,
-    'guia_amarela': 50,
-    'guia_rebaixada': 50,
-    'rampa': 50
+    'outros': 50
 }
 
 #Parametros
 DYNAMIC_DISTANCE_FACTOR = 2.0
 MIN_RATIO_CAR_PLACA = 5.0
 MAX_RATIO_CAR_PLACA = 100.0
-CONTACT_MASK_PERCENTAGE = 0.60
 
 # ==============================================================================
 # FUNÇÕES UTILITÁRIAS (GEOMETRIA E MASCARAS)
@@ -168,76 +172,74 @@ def check_plate_violations(car: Dict, plates: List[Dict]) -> bool:
     return False
 
 def check_ground_violations(car: Dict, zones: Dict):
-    is_faixa_infr = False
+    mask_faixa_pedestre = get_bottom_mask(car['mask'], MASK_PERCENTAGE_FAIXA)
     
-    #Usa a mascara de contato (faixa de pedestre)
-    if 'faixa_pedestre' in zones:
-        combined_zone = np.zeros_like(car['mask'], dtype=bool)
-        for m in zones['faixa_pedestre']:
-            combined_zone = np.logical_or(combined_zone, m)
-        
-        overlap = np.sum(np.logical_and(car['contact_mask'], combined_zone))
-        
-        if overlap > THRESHOLDS['faixa_pedestre']:
-            is_faixa_infr = True
-            tipo, grav = get_violation_text('faixa_pedestre')
-            car['infractions'].append({
-                'class_name': 'faixa_pedestre',
-                'tipo': tipo,
-                'intensidade': grav,
-                'detalhe': f"Sobreposicao: {overlap} pixels em 'faixa_pedestre'"
-            })
+    mask_base_calcada = get_bottom_mask(car['mask'], MASK_PERCENTAGE_CALCADA).astype(np.uint8)
+    kernel = np.ones((DILATION_KERNEL_SIZE, DILATION_KERNEL_SIZE), np.uint8)
+    mask_calcada_dilated = cv2.dilate(mask_base_calcada, kernel, iterations=1).astype(bool)
+    area_dilated_calcada = np.count_nonzero(mask_calcada_dilated)
 
-    #Usa a mascara completa (calçada)
-    if not is_faixa_infr:
-        max_overlap = 0
-        worst_class = None
+    best_violation = None
+    
+    for cls_name, masks in zones.items():
+        combined_zone = np.zeros_like(car['mask'], dtype=bool)
+        for m in masks: combined_zone = np.logical_or(combined_zone, m)
+
+        violation_detected = False
+        detalhe = ""
+        prioridade = 0 
+
+        if cls_name == 'faixa_pedestre':
+            overlap = np.sum(np.logical_and(mask_faixa_pedestre, combined_zone))
+            if overlap > THRESHOLDS['faixa_pedestre']:
+                violation_detected = True
+                prioridade = 3
+                detalhe = f"Faixa: {overlap}px"
+
+        elif cls_name == 'calcada':
+            if area_dilated_calcada > 0:
+                overlap = np.sum(np.logical_and(mask_calcada_dilated, combined_zone))
+                if overlap > THRESHOLDS['calcada']:
+                    violation_detected = True
+                    prioridade = 2
+                    detalhe = f"Calcada: {overlap}px"
         
-        for cls_name, masks in zones.items():
-            if cls_name == 'faixa_pedestre': continue
-            
-            threshold = THRESHOLDS.get(cls_name, 50)
-            combined_zone = np.zeros_like(car['mask'], dtype=bool)
-            for m in masks:
-                combined_zone = np.logical_or(combined_zone, m)
-            
+        else:
             overlap = np.sum(np.logical_and(car['mask'], combined_zone))
-            
-            if overlap > threshold:
-                if overlap > max_overlap:
-                    max_overlap = overlap
-                    worst_class = cls_name
-        
-        if worst_class:
-            tipo, grav = get_violation_text(worst_class)
-            car['infractions'].append({
-                'class_name': worst_class,
-                'tipo': tipo,
-                'intensidade': grav,
-                'detalhe': f"Sobreposicao: {max_overlap} pixels em '{worst_class}'"
-            })
+            if overlap > THRESHOLDS['outros']:
+                violation_detected = True
+                prioridade = 1
+                detalhe = f"Inv. {cls_name}: {overlap}px"
+
+        if violation_detected:
+            if best_violation is None or prioridade > best_violation['prio']:
+                best_violation = {'class_name': cls_name, 'detalhe': detalhe, 'prio': prioridade}
+
+    if best_violation:
+        tipo, grav = get_violation_text(best_violation['class_name'])
+        car['infractions'].append({
+            'class_name': best_violation['class_name'],
+            'tipo': tipo,
+            'intensidade': grav,
+            'detalhe': best_violation['detalhe']
+        })
 
 
 def analyze_infractions(data: Dict) -> List[Dict]:
     processed_cars = []
-    
     for i, car in enumerate(data['cars']):
         car_info = {
-            'id': i + 1,
-            'bbox': car['bbox'],
-            'mask': car['mask'],
-            'contact_mask': get_bottom_mask(car['mask'], CONTACT_MASK_PERCENTAGE),
-            'area': get_box_area(car['bbox']),
-            'infractions': []
+            'id': i + 1, 'bbox': car['bbox'], 'mask': car['mask'],
+            'area': get_box_area(car['bbox']), 'infractions': []
         }
-        
-        is_plate_infraction = check_plate_violations(car_info, data['plates'])
-        
-        if not is_plate_infraction:
+        if not check_plate_violations(car_info, data['plates']):
             check_ground_violations(car_info, data['zones'])
             
+        if car_info['infractions']:
+            print(f"  [CARRO {car_info['id']}] - INFRAÇÃO: {car_info['infractions'][0]['tipo']}")
+        else:
+            print(f"  [CARRO {car_info['id']}] - OK.")
         processed_cars.append(car_info)
-        
     return processed_cars
 
 # ==============================================================================
@@ -245,22 +247,31 @@ def analyze_infractions(data: Dict) -> List[Dict]:
 # ==============================================================================
 
 def draw_visuals(frame: np.ndarray, cars: List[Dict], zones: Dict, plates: List[Dict]) -> Tuple[np.ndarray, str]:
-    violators = [c for c in cars if c['infractions']]
-    primary_id = None
-    status_key = "OK"
+    if not cars:
+        return frame, "NONECAR"
+
+    primary_car = max(cars, key=lambda c: c['area'])
+    primary_id = primary_car['id']
     
-    if violators:
-        primary = max(violators, key=lambda c: c['area'])
-        primary_id = primary['id']
-        status_key = primary['infractions'][0]['class_name']
+    if primary_car['infractions']:
+        status_key = primary_car['infractions'][0]['class_name']
+    else:
+        status_key = "OK"
 
     for car in cars:
         is_primary = (car['id'] == primary_id)
         is_violator = bool(car['infractions'])
         
-        if is_primary: color = (0, 0, 255)
-        elif is_violator: color = (0, 255, 255)
-        else: color = (0, 255, 0)
+        if is_primary:
+            if is_violator:
+                color = (0, 0, 255) 
+            else:
+                color = (0, 255, 0) 
+        else:
+            if is_violator:
+                color = (0, 255, 255) 
+            else:
+                color = (0, 255, 0) 
 
         line2 = "OK"
         line1 = ""
@@ -276,7 +287,6 @@ def draw_visuals(frame: np.ndarray, cars: List[Dict], zones: Dict, plates: List[
 
         x1, y1, x2, y2 = car['bbox']
         cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-        
         font = cv2.FONT_HERSHEY_SIMPLEX
         cv2.putText(frame, line2, (x1, y1 - 10), font, 0.6, color, 2)
         if line1:
@@ -350,19 +360,6 @@ def validar_infracao(frame: np.ndarray, model: YOLO, image_name: str):
         # Analisa infrações dos carros detectados
         cars = analyze_infractions(parsed_data)
 
-        # Identifica carro principal (maior área entre infratores)
-        violators = [c for c in cars if c['infractions']]
-        if violators:
-            primary_car = max(violators, key=lambda c: c['area'])
-            primary_car_id = primary_car['id']
-        else:
-            primary_car_id = None
-
-        # Marca a flag 'principal' dentro de cada infração
-        for c in cars:
-            for inf in c['infractions']:
-                inf['principal'] = (c['id'] == primary_car_id)
-
         # Desenha visualizações no frame
         final_frame, status_key = draw_visuals(display_frame, cars, parsed_data['zones'], parsed_data['plates'])
 
@@ -400,18 +397,12 @@ def validar_infracao(frame: np.ndarray, model: YOLO, image_name: str):
         # Filtra apenas o carro principal
         # -----------------------------
         carro_principal = None
+        maiorArea = 0
 
         for carro in resultado.get("carros", []):
-            for inf in carro.get("infractions", []):
-                if inf.get("principal", False):
+            if carro.get("area", 0) > maiorArea:
                     carro_principal = carro
-                    break  # já encontrou um principal
-            if carro_principal:
-                break  # interrompe se achou o principal
-
-        # Se não houver carro principal, pega o primeiro carro da lista
-        if not carro_principal and resultado.get("carros"):
-            carro_principal = resultado["carros"][0]
+                    maiorArea = carro.get("area", 0)
 
         # Cria a chave 'carro' com o carro principal ou lista vazia
         resultado["carro"] = carro_principal if carro_principal else []
