@@ -20,7 +20,7 @@ VEHICLE_CLASS = 'carro'
 RELATIONAL_CLASS = 'placa_proibido'
 
 PROHIBITED_ZONES = [
-    'calcada', 'faixa_pedestre', 'guia_amarela', 'guia_rebaixada', 'rampa'
+    'calcada', 'faixa_pedestre'
 ]
 
 # Configuração para FAIXA DE PEDESTRE
