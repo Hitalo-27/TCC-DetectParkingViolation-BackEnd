@@ -1,3 +1,4 @@
+import uuid
 from fastapi import APIRouter, File, UploadFile, Depends
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder # Importação necessária para serializar o Pydantic
@@ -36,19 +37,21 @@ def ensure_upload_dir_exists():
         os.makedirs(UPLOAD_DIR)
 
 async def save_uploaded_file(file: UploadFile) -> str:
-    """Salva o arquivo no disco."""
     ensure_upload_dir_exists()
     
     original_name = file.filename
-    name, ext = os.path.splitext(original_name)
-    saved_path = os.path.join(UPLOAD_DIR, original_name)
+    _, ext = os.path.splitext(original_name)
+    
+    # Loop para garantir unicidade
+    while True:
+        random_name = f"{uuid.uuid4()}{ext}"
+        saved_path = os.path.join(UPLOAD_DIR, random_name)
+        
+        # Se NÃO existir um arquivo com esse nome, sai do loop
+        if not os.path.exists(saved_path):
+            break
 
-    counter = 1
-    while os.path.exists(saved_path):
-        new_name = f"{name}_{counter}{ext}"
-        saved_path = os.path.join(UPLOAD_DIR, new_name)
-        counter += 1
-
+    # Salva o arquivo
     with open(saved_path, "wb") as f:
         f.write(await file.read())
         
