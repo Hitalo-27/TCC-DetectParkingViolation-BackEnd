@@ -195,7 +195,14 @@ async def get_plate(
         car_details = detection_result.get("carro", [])
 
         if not car_details:
-            return {"success": True, "message": "Nenhum carro identificado na imagem."}
+            return {
+                "success": True, 
+                "data": {
+                    "imagem": '/detect/' + detection_result.get("imagem")
+                },
+                "message": "Nenhum carro identificado na imagem.",
+                "hasInfraction": False,
+            }
 
         # Verifica se há infração
         has_infraction = car_details.get("tem_infracao", False)
