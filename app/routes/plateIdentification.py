@@ -9,6 +9,8 @@ import os
 import cv2
 from dotenv import load_dotenv
 
+from app.utils.enviar_email import enviar_email
+
 # Importações internas
 from .. import schemas, models, auth
 from ..database import get_db
@@ -267,6 +269,36 @@ async def get_plate(
                 tipo_infracao=schemas.TypeOfInfractionBase.model_validate(infraction_type_obj),
                 user=schemas.UserResponse.model_validate(user)
             )
+
+            texto_endereco = "Local não identificado"
+            texto_placa = infraction_data.veiculo.placa_numero if infraction_data.veiculo.placa_numero else "Placa não identificada"
+
+            if infraction_data.data:
+                texto_data = infraction_data.data.strftime("%d/%m/%Y às %H:%M:%S")
+            else:
+                texto_data = "Data não identificada"
+
+            if infraction_data.endereco:
+                end = infraction_data.endereco 
+                texto_endereco = f"{end.rua}, {end.cidade} - {end.estado}"
+
+            mensagemEmail = f"""
+            <html>
+                <body>
+                    <p>Olá, <b>{user.username}</b>.</p>
+                    <p>O sistema <b>TCC IPD</b> concluiu a análise da imagem enviada e identificou uma infração. Seguem os detalhes:</p>
+                    
+                    <ul>
+                        <li><b>Infração:</b> {infraction_data.tipo_infracao.descricao}</li>
+                        <li><b>Veículo:</b> {texto_placa} (Cor: {infraction_data.veiculo.cor})</li>
+                        <li><b>Local:</b> {texto_endereco}</li>
+                        <li><b>Data/Hora:</b> {texto_data}</li>
+                    </ul>
+                </body>
+            </html>
+            """
+
+            enviar_email(user.email, "Infração Identificada", mensagemEmail, user.id)
 
             return {
                 "success": True,

@@ -31,9 +31,13 @@ def enviar_email(
         email_msg["From"] = EMAIL_REMETENTE
         email_msg["To"] = destinatario
         email_msg["Subject"] = assunto
-        email_msg.set_content(mensagem)
+        email_msg.set_content(mensagem, subtype='html')
 
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+          # Conectando ao servidor SMTP do Outlook
+        with smtplib.SMTP('smtp.office365.com', 587) as smtp:
+            smtp.ehlo()
+            smtp.starttls()  # Ativa TLS
+            smtp.ehlo()
             smtp.login(EMAIL_REMETENTE, SENHA_APP)
             smtp.send_message(email_msg)
 
