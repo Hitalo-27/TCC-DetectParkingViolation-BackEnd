@@ -157,7 +157,7 @@ def create_infraction_record(db: Session, image_path: str, car_id: int, address_
         veiculo_id=car_id,
         endereco_id=address_id,
         tipo_infracao_id=type_id,
-        user_id=user_id
+        usuario_id=user_id
     )
     db.add(infraction)
     db.commit()
@@ -267,7 +267,7 @@ async def get_plate(
                 veiculo=schemas.CarBase.model_validate(car_obj),
                 endereco=schemas.AddressBase.model_validate(infraction_address) if infraction_address else None,
                 tipo_infracao=schemas.TypeOfInfractionBase.model_validate(infraction_type_obj),
-                user=schemas.UserResponse.model_validate(user)
+                usuario=schemas.UserResponse.model_validate(user)
             )
 
             texto_endereco = "Local não identificado"

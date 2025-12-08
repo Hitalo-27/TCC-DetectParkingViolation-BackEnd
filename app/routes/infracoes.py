@@ -34,7 +34,7 @@ def consultar_infracoes(
         return {"placa": veiculo.placa_numero, "infracoes": infracoes}
 
     if user:
-        infracoes = db.query(models.Infraction).filter(models.Infraction.user_id == user).order_by(models.Infraction.id.desc()).all()
+        infracoes = db.query(models.Infraction).filter(models.Infraction.usuario_id == user).order_by(models.Infraction.id.desc()).all()
         if not infracoes:
             raise HTTPException(status_code=404, detail="Nenhuma infração encontrada para este usuário")
         return {"infracoes": infracoes}

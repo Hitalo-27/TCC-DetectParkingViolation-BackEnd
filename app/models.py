@@ -3,7 +3,7 @@ from sqlalchemy.orm import relationship
 from .database import Base
 
 class User(Base):
-    __tablename__ = "users"
+    __tablename__ = "usuario"
 
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(100), unique=True, index=True, nullable=False)
@@ -46,7 +46,7 @@ class TypeOfInfraction(Base):
     descricao = Column(String(255), nullable=False)
 
 class Infraction(Base):
-    __tablename__ = "infracoes"
+    __tablename__ = "infracao"
     id = Column(Integer, primary_key=True)
     data = Column(DateTime, nullable=True)
     imagem = Column(String, nullable=True)
@@ -60,8 +60,8 @@ class Infraction(Base):
     tipo_infracao_id = Column(Integer, ForeignKey("tipo_infracao.id"))
     tipo_infracao = relationship("TypeOfInfraction")  # objeto completo
 
-    user_id = Column(Integer, ForeignKey("users.id"))
-    user = relationship("User")  # objeto completo
+    usuario_id = Column(Integer, ForeignKey("usuario.id"))
+    usuario = relationship("User")  # objeto completo
 
 class Notification(Base):
     __tablename__ = "notificacao"
@@ -70,5 +70,5 @@ class Notification(Base):
     mensagem = Column(String(500), nullable=False)
     data = Column(DateTime, nullable=False)
 
-    user_id = Column(Integer, ForeignKey("users.id"))
-    user = relationship("User")
+    usuario_id = Column(Integer, ForeignKey("usuario.id"))
+    usuario = relationship("User")

@@ -67,7 +67,7 @@ class InfractionsBase(BaseModel):
     veiculo: CarBase
     endereco: Optional[AddressBase] = None
     tipo_infracao: TypeOfInfractionBase
-    user: UserResponse
+    usuario: UserResponse
 
     class Config:
         from_attributes = True
@@ -82,12 +82,12 @@ class InfractionsResponse(BaseModel):
 class NotificationCreate(BaseModel):
     mensagem: str
     data: datetime
-    user_id: int
+    usuario_id: int
 
 class NotificationBase(BaseModel):
     mensagem: str
     data: datetime
-    user: UserResponse
+    usuario: UserResponse
 
     class Config:
         from_attributes = True
