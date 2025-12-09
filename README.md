@@ -87,4 +87,4 @@ A documentação interativa (Swagger) está disponível em:
 
 O frontend do EcoDetect está disponível no repositório:
 
-👉 ```https://github.com/Hitalo-27/detect-parkingviolation-back-tcc```
+👉 ```https://github.com/Hitalo-27/TCC-DetectParkingViolation-FrontEnd```
